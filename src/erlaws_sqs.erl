@@ -15,7 +15,7 @@
 
 %% include record definitions
 -include_lib("xmerl/include/xmerl.hrl").
--include("../include/erlaws.hrl").
+-include("erlaws.hrl").
 
 -define(AWS_SQS_HOST, "queue.amazonaws.com").
 -define(AWS_SQS_VERSION, "2008-01-01").
@@ -328,10 +328,10 @@ query_request(Url, Action, Parameters) ->
 			[{"Signature", Signature}],
     Result = mkReq(get, Url, [], FinalQueryParams, "", ""),
     case Result of
-	{ok, _Status, Body} ->
+	{ok, Header, Body} ->
 	    {ok, Body};
-	{error, {_Proto, Code, Reason}, Body} ->
-	    throw({error, {integer_to_list(Code), Reason}, mkErr(Body)})
+	{error, Status, Body} ->
+	    throw({error, Status, mkErr(Body)})
     end.
 
 mkReq(Method, PreUrl, Headers, QueryParams, ContentType, ReqBody) ->
@@ -346,14 +346,13 @@ mkReq(Method, PreUrl, Headers, QueryParams, ContentType, ReqBody) ->
 
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
-    {ok, {Status, _ReplyHeaders, Body}} = 
-	http:request(Method, Request, HttpOptions, Options),
     %% io:format("Response:~n ~p~n", [binary_to_list(Body)]),
 	%% io:format("Status: ~p~n", [Status]),
+    {_Result, {Status, _ReplyHeaders, Body}} = httpc:request(Method, Request, HttpOptions, Options),
     case Status of 
 	{_, 200, _} -> {ok, Status, binary_to_list(Body)};
 	{_, _, _} -> {error, Status, binary_to_list(Body)}
-    end.
+    end. 
 
 mkErr(Xml) ->
     {XmlDoc, _Rest} = xmerl_scan:string( Xml ),
@@ -364,6 +363,6 @@ mkErr(Xml) ->
 	    [] -> "";
 	    [EMsg|_] -> EMsg#xmlText.value
 	end,
-    [#xmlText{value=RequestId}|_] = xmerl_xpath:string("//RequestID/text()", 
+    [#xmlText{value=RequestId}|_] = xmerl_xpath:string("//RequestId/text()", 
 						       XmlDoc),
     {ErrorCode, ErrorMessage, {requestId, RequestId}}.
